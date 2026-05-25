@@ -1,0 +1,278 @@
+// Room App - Prisma Schema
+// Database: MySQL
+// ORM: Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  TENANT
+  OWNER
+}
+
+enum SplitType {
+  EQUAL
+  CUSTOM
+}
+
+enum GroupStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RoomStatus {
+  VACANT
+  OCCUPIED
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  mobile      String   @unique
+  password    String
+  role        UserRole @default(TENANT)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Tenant relations
+  groupMemberships      ExpenseGroupMember[]
+  paidExpenses          Expense[]              @relation("ExpensePayer")
+  createdExpenses       Expense[]              @relation("ExpenseCreator")
+  expenseParticipations ExpenseParticipant[]
+  customSplits          CustomExpenseSplit[]
+  sentSettlements       Settlement[]           @relation("SettlementPayer")
+  receivedSettlements   Settlement[]           @relation("SettlementPayee")
+  createdGroups         ExpenseGroup[]
+
+  // Owner relations
+  buildings             Building[]
+  tenantRentalRoom      RentalRoom?            @relation("RoomTenant")
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// EXPENSE GROUPS
+// ─────────────────────────────────────────────
+
+model ExpenseGroup {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  status      GroupStatus @default(ACTIVE)
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  createdBy   User                 @relation(fields: [createdById], references: [id])
+  members     ExpenseGroupMember[]
+  expenses    Expense[]
+  settlements Settlement[]
+
+  @@map("expense_groups")
+}
+
+model ExpenseGroupMember {
+  id        String   @id @default(uuid())
+  groupId   String
+  userId    String
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  group     ExpenseGroup @relation(fields: [groupId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@map("expense_group_members")
+}
+
+// ─────────────────────────────────────────────
+// EXPENSES
+// ─────────────────────────────────────────────
+
+model Expense {
+  id          String    @id @default(uuid())
+  groupId     String
+  title       String
+  amount      Decimal   @db.Decimal(10, 2)
+  splitType   SplitType
+  paidById    String
+  createdById String
+  note        String?
+  expenseDate DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  group        ExpenseGroup         @relation(fields: [groupId], references: [id])
+  paidBy       User                 @relation("ExpensePayer", fields: [paidById], references: [id])
+  createdBy    User                 @relation("ExpenseCreator", fields: [createdById], references: [id])
+
+  // Equal split: only participants stored (no amounts)
+  participants ExpenseParticipant[]
+
+  // Custom split: explicit per-user amounts
+  customSplits CustomExpenseSplit[]
+
+  @@map("expenses")
+}
+
+// Equal split — stores who participates, amount is derived at runtime
+model ExpenseParticipant {
+  id        String @id @default(uuid())
+  expenseId String
+  userId    String
+
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+  @@map("expense_participants")
+}
+
+// Custom split — stores explicit split amount per user
+model CustomExpenseSplit {
+  id        String  @id @default(uuid())
+  expenseId String
+  userId    String
+  amount    Decimal @db.Decimal(10, 2)
+
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+  @@map("custom_expense_splits")
+}
+
+// ─────────────────────────────────────────────
+// SETTLEMENTS
+// ─────────────────────────────────────────────
+
+// Settlements are permanent — no soft delete, no edit
+model Settlement {
+  id          String   @id @default(uuid())
+  groupId     String
+  payerId     String
+  payeeId     String
+  amount      Decimal  @db.Decimal(10, 2)
+  note        String?
+  settledAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  group       ExpenseGroup @relation(fields: [groupId], references: [id])
+  payer       User         @relation("SettlementPayer", fields: [payerId], references: [id])
+  payee       User         @relation("SettlementPayee", fields: [payeeId], references: [id])
+
+  @@map("settlements")
+}
+
+// ─────────────────────────────────────────────
+// BUILDINGS (Owner)
+// ─────────────────────────────────────────────
+
+model Building {
+  id          String   @id @default(uuid())
+  ownerId     String
+  name        String
+  address     String
+  city        String
+  state       String?
+  pincode     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User          @relation(fields: [ownerId], references: [id])
+  rooms       RentalRoom[]
+
+  @@map("buildings")
+}
+
+// ─────────────────────────────────────────────
+// RENTAL ROOMS (Owner)
+// ─────────────────────────────────────────────
+
+model RentalRoom {
+  id           String     @id @default(uuid())
+  buildingId   String
+  roomNumber   String
+  floorNumber  Int?
+  monthlyRent  Decimal    @db.Decimal(10, 2)
+  status       RoomStatus @default(VACANT)
+  tenantId     String?    @unique   // One tenant per room max
+  tenantSince  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  building      Building       @relation(fields: [buildingId], references: [id])
+  tenant        User?          @relation("RoomTenant", fields: [tenantId], references: [id])
+  rentBills     RentBill[]
+  electricityBills ElectricityBill[]
+
+  @@unique([buildingId, roomNumber])
+  @@map("rental_rooms")
+}
+
+// ─────────────────────────────────────────────
+// RENT BILLS (Owner)
+// ─────────────────────────────────────────────
+
+model RentBill {
+  id          String     @id @default(uuid())
+  roomId      String
+  amount      Decimal    @db.Decimal(10, 2)
+  billingMonth DateTime  // Store first day of billing month e.g. 2025-06-01
+  dueDate     DateTime
+  status      BillStatus @default(PENDING)
+  paidAt      DateTime?
+  note        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  room        RentalRoom @relation(fields: [roomId], references: [id])
+
+  @@unique([roomId, billingMonth])
+  @@map("rent_bills")
+}
+
+// ─────────────────────────────────────────────
+// ELECTRICITY BILLS (Owner)
+// ─────────────────────────────────────────────
+
+model ElectricityBill {
+  id            String     @id @default(uuid())
+  roomId        String
+  billingMonth  DateTime   // Store first day of billing month
+  previousUnit  Decimal    @db.Decimal(10, 2)  // Meter reading at start of month
+  currentUnit   Decimal    @db.Decimal(10, 2)  // Meter reading at end of month
+  unitsConsumed Decimal    @db.Decimal(10, 2)  // Derived: currentUnit - previousUnit (computed in service)
+  ratePerUnit   Decimal    @db.Decimal(6, 2)
+  amount        Decimal    @db.Decimal(10, 2)  // Derived: unitsConsumed * ratePerUnit (computed in service)
+  dueDate       DateTime
+  status        BillStatus @default(PENDING)
+  paidAt        DateTime?
+  note          String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  room          RentalRoom @relation(fields: [roomId], references: [id])
+
+  @@unique([roomId, billingMonth])
+  @@map("electricity_bills")
+}
