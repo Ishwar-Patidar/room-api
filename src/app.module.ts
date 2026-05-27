@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ExpenseGroupsModule } from './expense-groups/expense-groups.module';
+import { ExpensesModule } from './expenses/expenses.module';
+import { BalancesModule } from './balances/balances.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { ExpenseGroupsModule } from './expense-groups/expense-groups.module';
     // Feature modules
     AuthModule,
     ExpenseGroupsModule,
+    ExpensesModule,
+    BalancesModule,
   ],
 })
 export class AppModule { }
