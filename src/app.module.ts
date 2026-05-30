@@ -6,6 +6,7 @@ import { ExpenseGroupsModule } from './expense-groups/expense-groups.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { BalancesModule } from './balances/balances.module';
 import { SettlementsModule } from './settlements/settlements.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { SettlementsModule } from './settlements/settlements.module';
     ExpensesModule,
     BalancesModule,
     SettlementsModule,
+    DashboardModule,
   ],
 })
 export class AppModule { }
