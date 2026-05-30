@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ExpenseGroupsModule } from './expense-groups/expense-groups.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { BalancesModule } from './balances/balances.module';
+import { SettlementsModule } from './settlements/settlements.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { BalancesModule } from './balances/balances.module';
     ExpenseGroupsModule,
     ExpensesModule,
     BalancesModule,
+    SettlementsModule,
   ],
 })
 export class AppModule { }
