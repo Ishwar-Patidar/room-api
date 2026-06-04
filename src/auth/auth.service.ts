@@ -100,10 +100,7 @@ export class AuthService {
       role: user.role,
     };
 
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: '7d' as const,
-    });
+    const accessToken = this.jwtService.sign(payload);
 
     return {
       accessToken,
